@@ -6,16 +6,18 @@ import numpy as np
 import os
 import argparse
 
+# Test VQ-VAE Reconstruction for a single image
 def test_reconstruction(image_path, output_prefix="vqvae_test"):
-    device = 'cpu' # VQ-VAE is small enough for CPU inference for 1 image
+    # CPU for simplicity
+    device = 'cpu'
     print(f"Using device: {device}")
 
-    # 1. Load VQ-VAE
-    print("Loading VQ-VAE...")
+    # Load VQ-VAE
     vqvae = VQVAE(num_hiddens=1024, num_residual_layers=2, num_residual_hiddens=256,
                   num_embeddings=1024, embedding_dim=256, commitment_cost=0.25)
     
     ckpt_path = 'checkpoints_vqvae_miniimagenet/vqvae_final.pt'
+    # Check if checkpoint exists
     if not os.path.exists(ckpt_path):
         print(f"Checkpoint {ckpt_path} not found!")
         return
