@@ -202,7 +202,9 @@ class VQVAE(nn.Module):
         z = self._encoder(x)
         z = self._pre_vq_conv(z)
         _, _, _, indices = self._vq_vae(z)
-        return indices.view(x.shape[0], -1) # Flatten to (B, H*W)
+        
+        # Flatten to (B, H*W)
+        return indices.view(x.shape[0], -1)
 
     def decode(self, indices):
         # indices: (B, H*W)
