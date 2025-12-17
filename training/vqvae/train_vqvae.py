@@ -58,8 +58,8 @@ def train_vqvae():
 
     print(f"Using device: {device}")
     
-    # Dataset - MiniImageNet (local)
-    # Returns (3, 64, 64) normalized tensors
+    # Dataset - MiniImageNet
+    # 3, 64, 64
     dataset = MiniImageNetDataset(root_dir='dataset', split='train', return_image=True)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     
@@ -77,11 +77,7 @@ def train_vqvae():
         total_perplexity = 0
         
         pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{max_epochs}")
-        for i, images in enumerate(pbar):
-            # images should be (B, 3, 64, 64) float normalized to [-1, 1] or [0, 1]
-            # data_utils likely returns [0, 255] or PIL?
-            # We need to ensure it returns tensors.
-            
+        for i, images in enumerate(pbar):            
             images = images.to(device)
             
             optimizer.zero_grad()
@@ -96,6 +92,7 @@ def train_vqvae():
             total_recon_error += recon_error.item()
             total_perplexity += perplexity.item()
             
+            # Log to wandb
             wandb.log({
                 "train_loss": loss.item(),
                 "recon_error": recon_error.item(),
@@ -109,30 +106,24 @@ def train_vqvae():
         epoch_time = time.time() - start_time
         print(f"Epoch {epoch+1} finished in {epoch_time:.2f}s, Avg Loss: {avg_loss:.4f}")
         
-        # Save checkpoint
+        # Save model
         torch.save(model.state_dict(), os.path.join(save_dir, f'vqvae_epoch_{epoch+1}.pt'))
         
         # Visualize
         # if (epoch + 1) % 5 == 0:
         model.eval()
         with torch.no_grad():
-            # Reconstruct first batch
-            # images is (B, 3, 64, 64)
             _, x_recon, _ = model(images[:8])
-            
-            # Convert to image
-            # Assuming images are [-0.5, 0.5] or [0, 1]? 
-            # If we use standard normalization, we need to denormalize.
-            # Let's assume [0, 1] for now.
-            
+                        
             orig_imgs = images[:8].cpu().permute(0, 2, 3, 1).numpy()
             recon_imgs = x_recon.cpu().permute(0, 2, 3, 1).numpy()
             
-            # Clip
+            # Clip to [0, 1]
             orig_imgs = np.clip(orig_imgs, 0, 1)
             recon_imgs = np.clip(recon_imgs, 0, 1)
             
             log_images = []
+            # Log 8 images
             for k in range(8):
                 combined = np.concatenate([orig_imgs[k], recon_imgs[k]], axis=1)
                 log_images.append(wandb.Image(combined, caption=f"Orig vs Recon {k}"))
