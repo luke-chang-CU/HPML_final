@@ -1,10 +1,15 @@
 import os
+import sys
+
+# Add project root to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.optim import Adam
-from data_utils import MiniImageNetDataset
-from vqvae import VQVAE
+from data.data_utils import MiniImageNetDataset
+from models.vqvae import VQVAE
 import time
 import wandb
 from tqdm import tqdm
