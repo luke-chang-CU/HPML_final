@@ -12,9 +12,13 @@ import numpy as np
 from PIL import Image
 
 def train_vqvae():
-    # Configuration
-    batch_size = 16 # Keep 32 for GPU safety
-    max_epochs = 50 # Increase epochs for better quality
+    # Settings for config
+    # TODO: Make these into parameters
+
+    # 16 or 32
+    batch_size = 16 
+    # 50 or 100
+    max_epochs = 50 
     learning_rate = 1e-4
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
@@ -22,6 +26,7 @@ def train_vqvae():
     if device == 'cuda':
         torch.backends.cudnn.enabled = False
         
+    # Save directory
     save_dir = 'checkpoints_vqvae_miniimagenet'
     os.makedirs(save_dir, exist_ok=True)
     
@@ -30,11 +35,12 @@ def train_vqvae():
     num_residual_hiddens = 256
     num_residual_layers = 2
     embedding_dim = 256
-    num_embeddings = 1024 # Codebook size
+    # Codebook size
+    num_embeddings = 1024 
     commitment_cost = 0.25
     decay = 0.99
 
-    # WandB Init
+    # Wandb, set as luke's project id in weight and bias
     wandb.init(project="speculative-decoding-distillation", name="vqvae-mini-imagenet", config={
         "batch_size": batch_size,
         "max_epochs": max_epochs,
