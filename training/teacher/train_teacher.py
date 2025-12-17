@@ -1,10 +1,15 @@
 import os
+import sys
+
+# Add project root to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+
 import torch
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
-from data_utils import TokenDataset
-from model import GPT, GPTConfig
-from vqvae import VQVAE
+from data.data_utils import TokenDataset
+from models.model import GPT, GPTConfig
+from models.vqvae import VQVAE
 import time
 import wandb
 from tqdm import tqdm
