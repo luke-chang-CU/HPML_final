@@ -6,13 +6,17 @@ import csv
 from PIL import Image
 from vqvae import VQVAE
 
+# Load 5 random images from CSV and verify VQ-VAE quality
+# Compare original and reconstructed images side-by-side
+
+# Check VQ-VAE quality for 5 training images
 def verify_vqvae_quality():
     # 1. Config
     data_csv = 'dataset/dogs_08_17.csv'
     output_dir = 'verify_vqvae_samples'
     os.makedirs(output_dir, exist_ok=True)
     num_samples = 5
-    device = 'cpu' # VQ-VAE is small
+    device = 'cpu'
 
     print(f"Using device: {device}")
 
@@ -39,11 +43,6 @@ def verify_vqvae_quality():
         # Random sample
         sampled_rows = np.random.choice(all_rows, num_samples, replace=False)
         for row in sampled_rows:
-            # Full path (Corrected based on `find` result)
-            # Images seem to be in `dataset/images/` flattened?
-            # Or `dataset/train/n...`? 
-            # The find result was `dataset/images/n0210855100001167.jpg`.
-            # So I will hardcode that structure.
             image_paths.append(os.path.join('dataset/images', row['filename']))
 
     # 4. Process and Save
@@ -76,8 +75,6 @@ def verify_vqvae_quality():
         save_path = os.path.join(output_dir, f'vqvae_comparison_{i}_{img_name}')
         combined.save(save_path)
         print(f"Saved {save_path}")
-
-    print("Done.")
 
 if __name__ == "__main__":
     verify_vqvae_quality()

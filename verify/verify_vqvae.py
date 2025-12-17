@@ -7,10 +7,13 @@ import numpy as np
 import os
 from PIL import Image
 
+# Verify VQ-VAE quality by comparing original and reconstructed images
+# For a batch of images
 def verify_vqvae():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # Same as training
     if device == 'cuda':
-        torch.backends.cudnn.enabled = False # Keep consistent with training
+        torch.backends.cudnn.enabled = False
         
     # Load Model
     model = VQVAE(num_hiddens=128, num_residual_layers=2, num_residual_hiddens=32,
@@ -64,7 +67,6 @@ def verify_vqvae():
         
         Image.fromarray(combined).save(os.path.join(output_dir, f'comparison_{i}.png'))
         
-    print("Done.")
 
 if __name__ == "__main__":
     verify_vqvae()
