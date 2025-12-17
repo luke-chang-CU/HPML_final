@@ -20,7 +20,8 @@ import numpy as np
 from PIL import Image
 
 def train():
-    # Configuration
+    # settings for the run
+    # batch size 32 seemed stable
     batch_size = 32
     max_epochs = 100 # Increased epochs for smaller dataset
     learning_rate = 5e-5
@@ -41,8 +42,8 @@ def train():
     print(f"Using device: {device}")
     torch.cuda.empty_cache()
 
-    # Dataset
-    token_file = 'dataset_tokens/dogs_08_17_tokens.pt'
+    # Dataset stuff
+    # make sure tokens are computed first!
     if not os.path.exists(token_file):
         print(f"Token file {token_file} not found.")
         return
@@ -52,7 +53,8 @@ def train():
     
     print(f"Dataset size: {len(dataset)}")
 
-    # Model (Unconditional)
+    # The Model (Unconditional)
+    # just standard GPT but no class cond
     config = GPTConfig(
         vocab_size=1024,
         block_size=256,
@@ -80,7 +82,7 @@ def train():
     vqvae.to('cpu')
     vqvae.eval()
 
-    # Training Loop
+    # Main loop happens here
     model.train()
     for epoch in range(max_epochs):
         start_time = time.time()
@@ -90,20 +92,8 @@ def train():
         for i, data in enumerate(pbar):
             # TokenDataset returns (tokens, labels) if labels exist, or just tokens.
             # Our precompute script saved labels=None, so it returns just tokens (tuple check in data_utils?)
-            # Let's check data_utils.TokenDataset
             # It checks isinstance(data, dict). We saved {'tokens':..., 'labels': None}.
             # So self.has_labels will be False (if we modify TokenDataset to check for None) or True but returns None.
-            # Actually, precompute_tokens_dogs saved 'labels': None.
-            # TokenDataset.__init__ sets self.labels = data['labels'].
-            # __getitem__ returns self.tokens[idx], self.labels[idx].
-            # self.labels is None. Indexing None raises TypeError.
-            # CRITICAL: We need to check if TokenDataset handles None labels properly. 
-            pass
-            
-            # --- FIXING ON THE FLY ---
-            # Instead of relying on TokenDataset behavior which might crash, 
-            # I will assume `data` might be a tuple or tensor.
-            # If tensor, good. If tuple (tokens, None), unpack.
             
             if isinstance(data, (tuple, list)):
                 tokens = data[0]

@@ -5,14 +5,14 @@ from torch.nn import functional as F
 
 class CausalSelfAttention(nn.Module):
     """
-    Causal Self-Attention with optional Flash Attention support.
-
+    Standard attention... might add Flash soon but it's tricky with versions.
+    
     Attributes:
-        c_attn (nn.Linear): Combined Key, Query, Value projection.
-        c_proj (nn.Linear): Output projection.
-        n_head (int): Number of attention heads.
-        n_embd (int): Embedding dimension.
-        flash (bool): Whether to use PyTorch 2.0+ scaled_dot_product_attention.
+        c_attn: does q,k,v all at once for speed
+        c_proj: output projection
+        n_head: heads count
+        n_embd: hidden size
+        flash: checks if we can use the fast pytorch 2.0 stuff
     """
     def __init__(self, config):
         super().__init__()
@@ -29,16 +29,18 @@ class CausalSelfAttention(nn.Module):
         self.dropout = config.dropout
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention') and not config.no_flash_attn
         if not self.flash:
-            print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
+            # flash attention is super fast so its annoying if we dont have it
+            print("WARNING: using slow attention. upgrade pytorch if u can")
         
-        # causal mask to ensure that attention is only applied to the left in the input sequence
+        # causal mask so we don't look into the future
         self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
     def forward(self, x, past_kv=None, use_cache=False):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
+        # split the queries, keys, and values.
+        # we calculate them all at once then break them apart
         q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
@@ -59,18 +61,13 @@ class CausalSelfAttention(nn.Module):
         # using flash attention if available
         # logic for manual attention needs update for past_kv size mismatch in mask
         # but pure Flash Attention usually handles this or we rely on explicit masking
-        # For simplicity with implementation, let's use manual implementation if past_kv is involved 
-        # OR just rely on sdpa handling it if we pass correct mask.
         # But F.scaled_dot_product_attention expects q, k, v. 
         # If k,v are longer than q, it computes attention correctly for q against all k,v.
-        # We just need to ensure causal mask is correct. 
         # For inference (q len 1, k len N), is_causal=False is fine as we attend to all past.
         
         if self.flash:
             # flash attention
             # strict causal masking is handled by is_causal=True. 
-            # However, if T_query != T_key, is_causal=True in sdpa might assume diagonal alignment which is tricky.
-            # Usually for decoding (T_q=1), is_causal=False is fine as we attend to all past.
             is_causal = True if past_kv is None else False
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=is_causal)
         else:
@@ -78,7 +75,6 @@ class CausalSelfAttention(nn.Module):
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
             # If past_kv is present, T is the current query length (usually 1).
             # The bias mask needs to be adjusted for the full sequence length (past_length + T).
-            # This part of the manual implementation is tricky with past_kv.
             # For simplicity, if past_kv is used, we assume T=1 and no causal mask is needed for the single query token.
             # If T > 1 and past_kv is None, then the original causal mask applies.
             if past_kv is None:
@@ -121,16 +117,8 @@ class Block(nn.Module):
 
     def forward(self, x, past_kv=None, use_cache=False):
         """
-        Forward pass of the Transformer Block.
-
-        Args:
-            x (torch.Tensor): Input tensor (B, T, C).
-            past_kv (tuple, optional): Past Key/Value tensors for caching.
-            use_cache (bool): Whether to return new KV states.
-
-        Returns:
-            x (torch.Tensor): Output tensor (B, T, C).
-            present_kv (tuple): New Key/Value tensors if use_cache=True, else None.
+        Run the block. 
+        if past_kv is here, we just use it to speed things up (cache)
         """
         attn_output, present_kv = self.attn(self.ln_1(x), past_kv=past_kv, use_cache=use_cache)
         x = x + attn_output
@@ -139,12 +127,10 @@ class Block(nn.Module):
 
 class GPT(nn.Module):
     """
-    GPT Language Model (Decoder-only Transformer).
+    Main GPT Class.
     
-    Supports:
-    - KV Caching for efficient inference.
-    - Class Conditioning.
-    - Speculative Decoding utilities (via all_logits flag).
+    Can handle KV Caching and Class Conditioning (for the dogs).
+    Also supports returning all logits if we need them for distillation.
     """
     def __init__(self, config):
         super().__init__()
@@ -260,17 +246,10 @@ class GPT(nn.Module):
     @torch.no_grad()
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, class_labels=None):
         """
-        Autoregressively generate new tokens.
-
-        Args:
-            idx (torch.Tensor): Starting indices (B, T).
-            max_new_tokens (int): Number of tokens to generate.
-            temperature (float): Sampling temperature (1.0 = standard, <1.0 = sharp).
-            top_k (int, optional): Top-K filtering.
-            class_labels (torch.Tensor, optional): Class IDs for conditional generation.
-
-        Returns:
-            idx (torch.Tensor): Completed sequences (B, T + max_new_tokens).
+        Generating tokens one by one...
+        
+        Indices: (B, T)
+        We append new tokens to the end.
         """
         past_kvs = None
         for k in range(max_new_tokens):

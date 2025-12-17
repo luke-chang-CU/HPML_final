@@ -17,12 +17,11 @@ import numpy as np
 from PIL import Image
 
 def train_vqvae():
-    # Settings for config
-    # TODO: Make these into parameters
-
-    # 16 or 32
+    # param settings
+    
+    # 16 or 32 is prob fine
     batch_size = 16 
-    # 50 or 100
+    # run for a bit
     max_epochs = 50 
     learning_rate = 1e-4
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -35,7 +34,8 @@ def train_vqvae():
     save_dir = 'checkpoints_vqvae_miniimagenet'
     os.makedirs(save_dir, exist_ok=True)
     
-    # Model Config
+    # Model configuration
+    # kept it standard deepmind size ish
     num_hiddens = 1024
     num_residual_hiddens = 256
     num_residual_layers = 2
@@ -59,7 +59,8 @@ def train_vqvae():
     print(f"Using device: {device}")
     
     # Dataset - MiniImageNet
-    # 3, 64, 64
+    # images are 3x64x64
+    # loading with return_image=True for VQVAE
     dataset = MiniImageNetDataset(root_dir='dataset', split='train', return_image=True)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     

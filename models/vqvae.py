@@ -4,12 +4,9 @@ import torch.nn.functional as F
 
 class VectorQuantizer(nn.Module):
     """
-    Standard Vector Quantization Layer.
-
-    Args:
-        num_embeddings (int): Vocabulary size (number of codebook vectors).
-        embedding_dim (int): Dimensionality of each codebook vector.
-        commitment_cost (float): Beta term for the commitment loss (scales encoder penalty).
+    This layer does the vector quantization. 
+    basically maps inputs to the nearest codebook vector.
+    commitment_cost is for the loss to make sure encoder outputs stick close to embeddings.
     """
     def __init__(self, num_embeddings, embedding_dim, commitment_cost=0.25):
         super(VectorQuantizer, self).__init__()
@@ -41,9 +38,10 @@ class VectorQuantizer(nn.Module):
         # Quantize and unflatten
         quantized = torch.matmul(encodings, self._embedding.weight).view(input_shape)
         
-        # Loss
+        # Loss calc
         e_latent_loss = F.mse_loss(quantized.detach(), inputs)
         q_latent_loss = F.mse_loss(quantized, inputs.detach())
+        # combine the losses
         loss = q_latent_loss + self._commitment_cost * e_latent_loss
         
         quantized = inputs + (quantized - inputs).detach()
@@ -86,13 +84,10 @@ class ResidualStack(nn.Module):
 
 class Encoder(nn.Module):
     """
-    VQ-VAE Encoder.
-    
-    Downsamples the 64x64 input image to a 16x16 grid of latent vectors.
-    Architecture:
-    - 2 Strided Convs (downsample 2x each)
-    - 1 Conv
-    - Residual Stack
+    Encodes images into latents.
+    Architecture is standard:
+    - a few downsampling convs
+    - and a residual stack at the end
     """
     def __init__(self, in_channels, num_hiddens, num_residual_layers, num_residual_hiddens):
         super(Encoder, self).__init__()
@@ -126,13 +121,9 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     """
-    VQ-VAE Decoder.
-    
-    Upsamples the 16x16 quantized grid back to 64x64 image.
-    Architecture:
-    - 1 Conv
-    - Residual Stack
-    - 2 Transposed Convs (upsample 2x each)
+    Decodes latents back to image.
+    Just the reverse of encoder basically.
+    uses transposed convs to upsample.
     """
     def __init__(self, in_channels, num_hiddens, num_residual_layers, num_residual_hiddens):
         super(Decoder, self).__init__()
@@ -165,14 +156,10 @@ class Decoder(nn.Module):
 
 class VQVAE(nn.Module):
     """
-    Vector Quantized Variational Autoencoder (VQ-VAE).
+    Main VQ-VAE class.
     
-    Compresses high-dimensional images into discrete tokens.
-    
-    Attributes:
-        _encoder (Encoder): Compress image to latents.
-        _vq_vae (VectorQuantizer): Quantize latents to nearest codebook vector.
-        _decoder (Decoder): Reconstruct image from quantized latents.
+    This holds the encoder, quantization layer, and decoder.
+    Used for tokneizing images for the GPT model.
     """
     def __init__(self, num_hiddens, num_residual_layers, num_residual_hiddens, 
                  num_embeddings, embedding_dim, commitment_cost):
