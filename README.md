@@ -8,23 +8,52 @@ This project explores **Speculative Decoding** to accelerate the inference of a 
 *   **Tokenizer**: VQ-VAE (Vector Quantized Variational Autoencoder).
 *   **Algorithm**: Speculative Sampling (Leviathan et al.).
 
-## 2. Code Repository Outline
+## 2. Experiment Setup
+
+### Models
+*   **Teacher**: 20 Layers, 16 Heads, 1024 Embedding Dim, 256 Block Size (Attributes ~250M params). Trained Unconditionally on Dog classes.
+*   **Student (Search Space)**: 
+    *   **10L**: Half depth of teacher.
+    *   **8L / 6L / 4L**: Progressively smaller variants.
+*   **Tokenization**: VQ-VAE (DeepMind style), Codebook Size 1024, Embedding Dim 256.
+
+### Data
+*   **Source**: Mini-ImageNet.
+*   **Subset**: 10 Dog Classes (IDs 8-17 from the training split).
+*   **Preprocessing**: Images resized to 64x64, quantized to 16x16 tokens (Sequence Length = 256).
+
+### Training Details
+*   **Teacher**: Trained for 100 Epochs.
+*   **Distillation (Hybrid Strategy)**:
+    *   **Temperature**: 1.5 (Softens distributions).
+    *   **Hybrid Loss**: 
+        *   **Tokens 0-32**: Alpha=0.2 (20% Hard Targets, 80% Soft Targets). Force stricter structure at start.
+        *   **Tokens 32+**: Alpha=0.0 (100% Soft Targets). Pure imitation for textures.
+    *   **Optimizer**: AdamW (lr=1e-4), Cosine Annealing.
+    *   **Hardware**: Trained on NVIDIA L4 GPU.
+
+## 3. Code Repository Outline
 The codebase is organized into modular components:
 
 ```
 ├── models/                  # Core Architecture
-│   ├── model.py             # GPT Transformer (w/ KV Cache, Class-Conditioning)
+│   ├── model.py             # GPT Transformer (w/ KV Cache)
 │   └── vqvae.py             # VQ-VAE for image tokenization
 ├── data/                    # Data Pipeline
 │   ├── data_utils.py        # Dataset loaders & Palette handling
 │   ├── prepare_dog_dataset.py # Splitting/Filtering Mini-ImageNet
-│   └── precompute_tokens.py # Offline tokenization
+│   ├── precompute_tokens.py # Offline tokenization (Generic)
+│   └── precompute_tokens_dogs.py # Tokenization for Dog subset
 ├── training/                # Training Scripts
-│   ├── teacher/             # Teacher training (Autoregressive)
-│   ├── student/             # Knowledge Distillation (Hybrid)
+│   ├── teacher/             # Teacher training
+│   │   └── train_teacher_unconditional.py
+│   ├── student/             # Knowledge Distillation
+│   │   ├── train_distill_hybrid.py        # Hybrid Distillation (Hard+Soft)
+│   │   └── train_distill_unconditional.py # Basic Distillation
 │   └── vqvae/               # VQ-VAE training
+│       └── train_vqvae.py
 ├── inference/               # Inference & Benchmarking
-│   ├── inference_speculative.py # Core Speculative Decoding Loop
+│   ├── inference_speculative_unconditional.py # Core Speculative Decoding Loop
 │   ├── benchmark_hybrid.py      # Comprehensive Benchmarking Suite
 │   └── benchmark_teacher.py     # Teacher-only Benchmarks
 └── verify/                  # Unit Tests & Sanity Checks
@@ -32,7 +61,18 @@ The codebase is organized into modular components:
     └── verify_vqvae.py      # Reconstruction checks
 ```
 
-## 3. Example Commands for Execution
+## 4. Example Commands for Execution
+
+### Prerequisites (VQ-VAE & Data)
+First, train the tokenizer (VQ-VAE) and precompute the image tokens for the dataset.
+
+```bash
+# 1. Train VQ-VAE on Mini-ImageNet
+python training/vqvae/train_vqvae.py
+
+# 2. Precompute Tokens for Dog Classes (IDs 8-17)
+python data/precompute_tokens_dogs.py
+```
 
 ### Training the Teacher
 ```bash
@@ -55,7 +95,7 @@ python inference/benchmark_hybrid.py
 python inference/inference_speculative_unconditional.py
 ```
 
-## 4. Results & Observations
+## 5. Results & Observations
 
 We benchmarked the systems on **Unconditional Dog Generation**.
 
@@ -82,5 +122,5 @@ Despite the Students being **5x faster** in standalone mode, Speculative Decodin
 *   **Rejection Cost**: With an acceptance rate of ~4%, the system spends most of its time rejecting drafts and reverting the KV cache, which is computationally expensive.
 *   **Conclusion**: Efficient Speculative Decoding requires **Manifold Alignment**. The Student must not just be "good"; it must be "identical" to the Teacher. Future work should focus on **On-Policy Distillation (DAGGER)** or **Regularizing the Teacher** to be less strict.
 
-## 5. Weights & Biases
+## 6. Weights & Biases
 [Link to WandB Project Board](https://wandb.ai/ltc2125-columbia-university/speculative-decoding-distillation)
